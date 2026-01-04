@@ -35,7 +35,7 @@ def mine_worker(args):
 
     # TODO: Mogoce spremeni interval tak da je dinamicen
     counter = 0
-    check_interval = 50
+    check_interval = 100
     while True:
         if counter % check_interval == 0 and stop_event.is_set():
             return None
