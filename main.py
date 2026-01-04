@@ -1,86 +1,107 @@
-import socket
-import threading
-import json
 import time
+import multiprocessing
+from multiprocessing import Event
 from block import Block
-from blockchain import Blockchain, is_chain_valid
-import interface
-from old.main import comulative_difficulty
+from blockchain import Blockchain
+from utils.blockchainUtils import *
 
-difficulty = 4
+fixed_difficulty = 5
+num_threads = None
+show_stats = True
+block_limit = 100
+
+start_difficulty = 4
 interval_generiranja_blokov = 20
 interval_popravka_tezavnosti = 10
 
-blockchain = Blockchain(difficulty, interval_generiranja_blokov, interval_popravka_tezavnosti)
+def init_worker(event):
+    global stop_event
+    stop_event = event
+
+
+def mine_worker(args):
+    difficulty, index, previous_hash, start_nonce, step = args
+    nonce = start_nonce
+    target = "0" * difficulty
+
+    block = Block(
+        index=index,
+        timestamp=time.time(),
+        data=f"Block {index}",
+        difficulty=difficulty,
+        miner="hmmmmmm",
+        previous_hash=previous_hash
+    )
+
+    # TODO: Mogoce spremeni interval tak da je dinamicen
+    counter = 0
+    check_interval = 100
+    while True:
+        if counter % check_interval == 0 and stop_event.is_set():
+            return None
+
+        block.nonce = nonce
+        hash_value = block.calculate_hash()
+        counter += 1
+
+        if hash_value.startswith(target):
+            block.hash = hash_value
+            block.miner = f"miner_{start_nonce}"
+            stop_event.set()
+            return block
+        nonce += step
+
 
 def mine(blockchain):
-    global run
+    if num_threads is None:
+        num_processes = multiprocessing.cpu_count()
+    else:
+        num_processes = num_threads
 
-    while True:
-        run = True
+    stop_event = Event()
+    pool = multiprocessing.Pool(processes=num_processes, initializer=init_worker, initargs=(stop_event,))
 
-        try:
-            new_block = Block(
-                index=len(blockchain.chain),
-                timestamp=time.time(),
-                data=f"Block {len(blockchain.chain)}",
-                difficulty=blockchain.difficulty,
-                miner="hmmmmmm",
-                previous_hash=blockchain.get_latest_block().hash
-            )
+    try:
+        while True:
+            if block_limit and len(blockchain.chain) >= block_limit:
+                print("Dosežen limit blokov, ustavitev rudarjenja.")
+                break
 
-            target = "0" * blockchain.difficulty
+            latest_block = blockchain.get_latest_block()
+            stop_event.clear()
 
-            while new_block.hash[:new_block.difficulty] != target and run:
-                new_block.nonce += 1
-                new_block.hash = new_block.calculate_hash()
+            tasks = []
+            for i in range(num_processes):
+                tasks.append((blockchain.difficulty, latest_block.index + 1, latest_block.hash, i, num_processes))
 
-            if not run:
-                print("Mining reset. Mining new block...", "red")
-                continue
+            for result_block in pool.imap_unordered(mine_worker, tasks):
+                if result_block:
+                    if blockchain.is_new_block_valid(result_block):
+                        blockchain.add_block(result_block)
+                        print_block(result_block)
+                        break
 
-            if blockchain.is_new_block_valid(new_block):
-                blockchain.add_block(new_block)
-                print_block(new_block)
+            if fixed_difficulty is None:
                 blockchain.adjust_difficulty()
-            else:
-                continue
 
-        except Exception as e:
-            print("Error mining" + str(e))
-
-
-def print_block(block):
-    print("-" * 20)
-    print(f"Index: {block.index}")
-    print(f"  Timestamp: {block.timestamp}")
-    print(f"  Data: {block.data}")
-    print(f"  Difficulty: {block.difficulty}")
-    print(f"  Nonce: {block.nonce}")
-    print(f"  Miner: {block.miner}")
-    print(f"  Previous Hash: {block.previous_hash}")
-    print(f"  Hash: {block.hash}")
-    print("-" * 20)
-
-def print_blockchain(blockchain_instance):
-    print("-" * 20)
-    for block in blockchain_instance.chain:
-        print(f"Index: {block.index}")
-        print(f"  Timestamp: {block.timestamp}")
-        print(f"  Data: {block.data}")
-        print(f"  Difficulty: {block.difficulty}")
-        print(f"  Nonce: {block.nonce}")
-        print(f"  Miner: {block.miner}")
-        print(f"  Previous Hash: {block.previous_hash}")
-        print(f"  Hash: {block.hash}")
-        print("-" * 20)
-    print(f"Total Blocks: {len(blockchain_instance.chain)}\n")
+    except Exception as e:
+        print(f"Napaka pri rudarjenju: {e}")
+    finally:
+        pool.close()
+        pool.join()
 
 
 def main():
-    global blockchain
+    if fixed_difficulty is None:
+        difficulty = start_difficulty
+    else:
+        difficulty = fixed_difficulty
 
+    blockchain = Blockchain(difficulty, interval_generiranja_blokov, interval_popravka_tezavnosti)
     mine(blockchain)
+
+    if show_stats:
+        print_stats(blockchain)
 
 
 if __name__ == "__main__":
