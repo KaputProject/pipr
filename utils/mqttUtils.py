@@ -4,14 +4,17 @@ import random
 import os
 from typing import Callable, Optional
 
+from dotenv import load_dotenv
 from paho.mqtt import client as mqtt_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BROKER_STR = os.getenv("MQTT_BROKER", "")
-MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
-MQTT_PASSWORD =  os.getenv("MQTT_PASSWORD", "")
+load_dotenv()
+
+MQTT_USERNAME = os.getenv("MQTT_USERNAME")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
+BROKER_STR = os.getenv("MQTT_BROKER")
 TOPIC = "test"
 
 
