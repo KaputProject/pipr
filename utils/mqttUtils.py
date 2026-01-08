@@ -1,6 +1,7 @@
 import logging
 import ssl
 import random
+import os
 from typing import Callable, Optional
 
 from paho.mqtt import client as mqtt_client
@@ -8,9 +9,9 @@ from paho.mqtt import client as mqtt_client
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BROKER_STR = "ssl://13bdcd5deae14b039072ba5899cb41d9.s1.eu.hivemq.cloud:8883"
-MQTT_USERNAME = "kaput"
-MQTT_PASSWORD = "Kaput1234"
+BROKER_STR = os.getenv("MQTT_BROKER", "")
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
+MQTT_PASSWORD =  os.getenv("MQTT_PASSWORD", "")
 TOPIC = "test"
 
 
