@@ -1,9 +1,14 @@
+import threading
 import time
 import multiprocessing
 from multiprocessing import Event
 from block import Block
 from blockchain import Blockchain
+from server import logger
 from utils.blockchainUtils import *
+from collections import deque
+from utils.mqttUtils import connect_mqtt, subscribe
+import json
 
 fixed_difficulty = 5
 num_threads = None
@@ -13,6 +18,8 @@ block_limit = 100
 start_difficulty = 4
 interval_generiranja_blokov = 20
 interval_popravka_tezavnosti = 10
+received_data = deque()
+topic = "blockchain/data"
 
 def init_worker(event):
     global stop_event
@@ -20,20 +27,19 @@ def init_worker(event):
 
 
 def mine_worker(args):
-    difficulty, index, previous_hash, start_nonce, step = args
+    difficulty, data, previous_hash, start_nonce, step, index = args
     nonce = start_nonce
     target = "0" * difficulty
 
     block = Block(
         index=index,
         timestamp=time.time(),
-        data=f"Block {index}",
+        data=f"{data}",
         difficulty=difficulty,
         miner="hmmmmmm",
         previous_hash=previous_hash
     )
 
-    # TODO: Mogoce spremeni interval tak da je dinamicen
     counter = 0
     check_interval = 100
     while True:
@@ -50,7 +56,6 @@ def mine_worker(args):
             stop_event.set()
             return block
         nonce += step
-
 
 def mine(blockchain):
     if num_threads is None:
@@ -69,10 +74,15 @@ def mine(blockchain):
 
             latest_block = blockchain.get_latest_block()
             stop_event.clear()
+            if(received_data):
+                data = received_data.popleft()
+
+            else:
+                data = latest_block.index + 1
 
             tasks = []
             for i in range(num_processes):
-                tasks.append((blockchain.difficulty, latest_block.index + 1, latest_block.hash, i, num_processes))
+                tasks.append((blockchain.difficulty,data, latest_block.hash, i, num_processes,latest_block.index + 1))
 
             for result_block in pool.imap_unordered(mine_worker, tasks):
                 if result_block:
@@ -90,8 +100,28 @@ def mine(blockchain):
         pool.close()
         pool.join()
 
+def mqtt_on_message(client, userdata, msg):
+    """Callback: store received MQTT messages into received_data."""
+    payload = msg.payload.decode("utf-8", errors="replace")
+    received_data.append(payload)
+    logger.info(f"received data: {received_data}")
+    logger.info("MQTT received on `%s`: %s", msg.topic, payload)
+
+
+def start_mqtt_listener():
+    """Start MQTT client in background thread; all messages go into received_data."""
+    client = connect_mqtt(on_message=mqtt_on_message)
+    subscribe(client, topic)
+
+    thread = threading.Thread(target=client.loop_forever, daemon=True)
+    thread.start()
+    logger.info("MQTT listener started on topic `%s`", topic)
+    return client, thread
 
 def main():
+    mqtt_client, mqtt_thread = start_mqtt_listener()
+    received_data.append("Initial block data")
+
     if fixed_difficulty is None:
         difficulty = start_difficulty
     else:
