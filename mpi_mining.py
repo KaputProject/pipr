@@ -30,11 +30,13 @@ from collections import deque
 import logging
 from typing import Optional, List, Any
 
-# Poskus uvoza mpi4py
-try:
-    from mpi4py import MPI
-except ImportError:
-    MPI = None
+MPI = None
+
+if multiprocessing.current_process().name == 'MainProcess':
+    try:
+        from mpi4py import MPI
+    except ImportError:
+        pass
 
 from utils.mqttListener import MqttListener
 from block import Block
@@ -46,23 +48,30 @@ logger = logging.getLogger(__name__)
 
 # Težavnost rudarjenja (število vodilnih ničel v hashu)
 # None = dinamično prilagajanje (začne s start_difficulty)
-fixed_difficulty = 4
+fixed_difficulty = 5
+
 # Začetna težavnost (če je fixed_difficulty = None)
 start_difficulty = 4
+
 # Intervali za dinamično prilagajanje težavnosti
 interval_generiranja_blokov = 20
 interval_popravka_tezavnosti = 10
+
 # Število blokov za rudarjenje
-block_limit = 100
+block_limit = 50
+
 # Število MPI procesov (1 server + N-1 workerjev)
 # None = število CPU jeder
-num_mpi_processes = 4
+num_mpi_processes = 2
+
 # Število niti na workerja za večnitno rudarjenje
 # None = število CPU jeder
-num_threads = 5
+num_threads = 4
+
 # MQTT nastavitve
 use_mqtt = True
 mqtt_topic = "blockchain/upload"
+
 # Prikaži statistiko na koncu
 show_stats = True
 
@@ -129,9 +138,7 @@ def mine_worker(args):
 
 
 def mine_block_multithread(task: TaskMessage, rank: int, external_stop_callback=None):
-
     num_procs = task.num_threads if task.num_threads else multiprocessing.cpu_count()
-    
     local_stop_event = Event()
     pool = multiprocessing.Pool(
         processes=num_procs,

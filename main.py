@@ -11,9 +11,9 @@ from utils.mqttListener import MqttListener
 import json
 
 fixed_difficulty = 5
-num_threads = None
+num_threads = 1
 show_stats = True
-block_limit = 100
+block_limit = 50
 
 start_difficulty = 4
 interval_generiranja_blokov = 20
