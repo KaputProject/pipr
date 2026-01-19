@@ -7,19 +7,19 @@ from blockchain import Blockchain
 from server import logger
 from utils.blockchainUtils import *
 from collections import deque
-from utils.mqttUtils import connect_mqtt, subscribe
+from utils.mqttListener import MqttListener
 import json
 
 fixed_difficulty = 5
-num_threads = None
+num_threads = 1
 show_stats = True
-block_limit = 100
+block_limit = 50
 
 start_difficulty = 4
 interval_generiranja_blokov = 20
 interval_popravka_tezavnosti = 10
 received_data = deque()
-topic = "blockchain/data"
+topic = "blockchain/upload"
 
 def init_worker(event):
     global stop_event
@@ -100,26 +100,9 @@ def mine(blockchain):
         pool.close()
         pool.join()
 
-def mqtt_on_message(client, userdata, msg):
-    """Callback: store received MQTT messages into received_data."""
-    payload = msg.payload.decode("utf-8", errors="replace")
-    received_data.append(payload)
-    logger.info(f"received data: {received_data}")
-    logger.info("MQTT received on `%s`: %s", msg.topic, payload)
-
-
-def start_mqtt_listener():
-    """Start MQTT client in background thread; all messages go into received_data."""
-    client = connect_mqtt(on_message=mqtt_on_message)
-    subscribe(client, topic)
-
-    thread = threading.Thread(target=client.loop_forever, daemon=True)
-    thread.start()
-    logger.info("MQTT listener started on topic `%s`", topic)
-    return client, thread
-
 def main():
-    mqtt_client, mqtt_thread = start_mqtt_listener()
+    mqtt_listener = MqttListener(topic=topic, data_queue=received_data, logger=logger)
+    mqtt_listener.start()
     received_data.append("Initial block data")
 
     if fixed_difficulty is None:
@@ -135,4 +118,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    RUN_MPI_MINING = True
+    if RUN_MPI_MINING:
+        import mpi_mining
+        mpi_mining.main()
+    else:
+        main()

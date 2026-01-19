@@ -1,3 +1,5 @@
+import sys
+
 def print_block(block):
     print("-" * 20)
     print(f"Index: {block.index}")
@@ -9,6 +11,8 @@ def print_block(block):
     print(f"  Previous Hash: {block.previous_hash}")
     print(f"  Hash: {block.hash}")
     print("-" * 20)
+    sys.stdout.flush()
+
 
 
 def print_blockchain(blockchain):
