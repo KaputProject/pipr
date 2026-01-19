@@ -1,0 +1,8 @@
+# Odvisnosti za MPI bločno verigo
+
+# Osnovna MPI knjižnica za Python
+mpi4py>=3.1.0
+
+# Obstoječe odvisnosti projekta
+paho-mqtt>=1.6.0
+python-dotenv>=1.0.0
